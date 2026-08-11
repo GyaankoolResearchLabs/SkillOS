@@ -427,12 +427,6 @@ const createEmployee = async (req, res) => {
     // =======================================
     // FIND ONBOARDING COURSES
     // =======================================
-    //
-    // IMPORTANT:
-    // Only courses belonging to the
-    // authenticated manager's organization
-    // can be assigned automatically.
-    // =======================================
 
     const onboardingCourses =
       await Course.find({
@@ -496,7 +490,13 @@ const createEmployee = async (req, res) => {
             const found =
               course.onboardingAssessments?.find(
                 (item) =>
-                  item.title === title
+                  item.title &&
+                  item.title
+                    .trim()
+                    .toLowerCase() ===
+                  title
+                    .trim()
+                    .toLowerCase()
               );
 
             if (found) {
@@ -528,8 +528,11 @@ const createEmployee = async (req, res) => {
               "5 minutes",
 
             questions:
-              assessment?.questions ||
-              [],
+              Array.isArray(
+                assessment?.questions
+              )
+                ? assessment.questions
+                : [],
 
             passingScore:
               assessment?.passingScore ||
@@ -552,12 +555,6 @@ const createEmployee = async (req, res) => {
 
     // =======================================
     // CREATE COURSE ASSIGNMENTS
-    // =======================================
-    //
-    // IMPORTANT:
-    // organizationId is explicitly stored
-    // on every automatically-created
-    // onboarding assignment.
     // =======================================
 
     const assignments = [];
@@ -1071,8 +1068,63 @@ const syncEmployeeOnboarding = async (
   res
 ) => {
   try {
+    console.log(
+      "=========================================="
+    );
+
+    console.log(
+      "SYNC EMPLOYEE ONBOARDING"
+    );
+
+    console.log(
+      "=========================================="
+    );
+
+    // ---------------------------------------
+    // Resolve Employee ID
+    // ---------------------------------------
+
     const employeeId =
-      req.user.id;
+      req.user?._id ||
+      req.user?.id;
+
+    if (!employeeId) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Authentication required.",
+      });
+    }
+
+    // ---------------------------------------
+    // Resolve Organization
+    // ---------------------------------------
+
+    const organizationId =
+      req.organizationId ||
+      req.user?.organizationId;
+
+    if (!organizationId) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Organization context is required.",
+      });
+    }
+
+    console.log(
+      "EMPLOYEE ID:",
+      employeeId
+    );
+
+    console.log(
+      "ORGANIZATION ID:",
+      organizationId
+    );
+
+    // ---------------------------------------
+    // Find Employee
+    // ---------------------------------------
 
     const employee =
       await User.findOne({
@@ -1080,7 +1132,7 @@ const syncEmployeeOnboarding = async (
           employeeId,
 
         organizationId:
-          req.organizationId,
+          organizationId,
       });
 
     if (!employee) {
@@ -1090,6 +1142,15 @@ const syncEmployeeOnboarding = async (
           "Employee not found.",
       });
     }
+
+    console.log(
+      "EMPLOYEE FOUND:",
+      employee.email
+    );
+
+    // ---------------------------------------
+    // Find Existing Onboarding
+    // ---------------------------------------
 
     const onboarding =
       await Onboarding.findOne({
@@ -1105,16 +1166,19 @@ const syncEmployeeOnboarding = async (
       });
     }
 
+    console.log(
+      "ONBOARDING FOUND:",
+      onboarding._id
+    );
+
     // ---------------------------------------
-    // IMPORTANT:
-    // Only use onboarding courses from the
-    // employee's current organization.
+    // Find Published Onboarding Courses
     // ---------------------------------------
 
-    const courses =
+    let onboardingCourses =
       await Course.find({
         organizationId:
-          req.organizationId,
+          organizationId,
 
         audience:
           "Employee",
@@ -1150,16 +1214,126 @@ const syncEmployeeOnboarding = async (
           },
         ],
       }).select(
-        "_id onboardingAssessments"
+        "_id courseTitle organizationId audience category status onboardingAssessments"
       );
 
-    if (!courses.length) {
+    console.log(
+      "ONBOARDING COURSES FOUND:",
+      onboardingCourses.length
+    );
+
+    // ---------------------------------------
+    // FALLBACK
+    //
+    // If the course has generated
+    // onboardingAssessments but does not
+    // have the expected category/tag,
+    // find it directly within the same
+    // organization.
+    // ---------------------------------------
+
+    if (!onboardingCourses.length) {
+      console.log(
+        "NO STANDARD ONBOARDING COURSE FOUND."
+      );
+
+      console.log(
+        "SEARCHING FOR COURSES WITH GENERATED ONBOARDING ASSESSMENTS..."
+      );
+
+      onboardingCourses =
+        await Course.find({
+          organizationId:
+            organizationId,
+
+          audience:
+            "Employee",
+
+          status:
+            "Published",
+
+          "onboardingAssessments.0":
+            {
+              $exists: true,
+            },
+        }).select(
+          "_id courseTitle organizationId audience category status onboardingAssessments"
+        );
+
+      console.log(
+        "ASSESSMENT-BASED COURSES FOUND:",
+        onboardingCourses.length
+      );
+    }
+
+    // ---------------------------------------
+    // No Courses Found
+    // ---------------------------------------
+
+    if (!onboardingCourses.length) {
       return res.status(404).json({
         success: false,
         message:
-          "No onboarding courses found.",
+          "No published onboarding course with generated assessments was found for this organization.",
       });
     }
+
+    // ---------------------------------------
+    // Debug Courses
+    // ---------------------------------------
+
+    onboardingCourses.forEach(
+      (course) => {
+        console.log(
+          "------------------------------------------"
+        );
+
+        console.log(
+          "COURSE:",
+          course.courseTitle
+        );
+
+        console.log(
+          "COURSE ID:",
+          course._id
+        );
+
+        console.log(
+          "COURSE ORGANIZATION:",
+          course.organizationId
+        );
+
+        console.log(
+          "COURSE AUDIENCE:",
+          course.audience
+        );
+
+        console.log(
+          "COURSE CATEGORY:",
+          course.category
+        );
+
+        console.log(
+          "COURSE STATUS:",
+          course.status
+        );
+
+        console.log(
+          "ONBOARDING ASSESSMENTS:",
+          course
+            .onboardingAssessments
+            ?.length || 0
+        );
+
+        console.log(
+          "------------------------------------------"
+        );
+      }
+    );
+
+    // ---------------------------------------
+    // Required Induction Titles
+    // ---------------------------------------
 
     const inductionTitles = [
       "Company Introduction",
@@ -1169,20 +1343,51 @@ const syncEmployeeOnboarding = async (
       "Role & Responsibilities",
     ];
 
-    onboarding.induction =
+    // ---------------------------------------
+    // Preserve Existing Progress
+    // ---------------------------------------
+
+    const existingInduction =
+      Array.isArray(
+        onboarding.induction
+      )
+        ? onboarding.induction
+        : [];
+
+    // ---------------------------------------
+    // Rebuild Induction Items
+    // ---------------------------------------
+
+    const inductionItems =
       inductionTitles.map(
         (title) => {
           let assessment = null;
 
+          // Search all available courses
           for (
-            const course of courses
+            const course of onboardingCourses
           ) {
             const found =
-              course.onboardingAssessments?.find(
-                (item) =>
-                  item.title ===
-                  title
-              );
+              course
+                .onboardingAssessments
+                ?.find(
+                  (item) => {
+                    if (
+                      !item?.title
+                    ) {
+                      return false;
+                    }
+
+                    return (
+                      item.title
+                        .trim()
+                        .toLowerCase() ===
+                      title
+                        .trim()
+                        .toLowerCase()
+                    );
+                  }
+                );
 
             if (found) {
               assessment =
@@ -1193,97 +1398,234 @@ const syncEmployeeOnboarding = async (
           }
 
           console.log(
-            `SYNC ${title}:`,
+            `INDUCTION ASSESSMENT: ${title}`,
             assessment
               ? "FOUND"
               : "NOT FOUND"
           );
+
+          // -----------------------------------
+          // Existing Employee Progress
+          // -----------------------------------
+
+          const existing =
+            existingInduction.find(
+              (item) =>
+                item?.title
+                  ?.trim()
+                  .toLowerCase() ===
+                title
+                  .trim()
+                  .toLowerCase()
+            );
+
+          // -----------------------------------
+          // Return Updated Induction
+          // -----------------------------------
 
           return {
             title,
 
             description:
               assessment?.description ||
+              existing?.description ||
               "",
 
             studyContent:
               assessment?.studyContent ||
+              existing?.studyContent ||
               "",
 
             estimatedDuration:
               assessment?.estimatedDuration ||
+              existing?.estimatedDuration ||
               "5 minutes",
 
             questions:
-              assessment?.questions ||
-              [],
+              Array.isArray(
+                assessment?.questions
+              )
+                ? assessment.questions
+                : Array.isArray(
+                    existing?.questions
+                  )
+                  ? existing.questions
+                  : [],
 
             passingScore:
               assessment?.passingScore ||
+              existing?.passingScore ||
               80,
 
-            attempts: [],
+            // Preserve existing progress
+            attempts:
+              existing?.attempts ||
+              [],
 
             bestScore:
+              existing?.bestScore ||
               0,
 
             lastScore:
+              existing?.lastScore ||
               0,
 
             passed:
+              existing?.passed ||
               false,
 
             completed:
+              existing?.completed ||
               false,
 
             completedAt:
+              existing?.completedAt ||
               null,
           };
         }
       );
 
+    // ---------------------------------------
+    // Update Induction
+    // ---------------------------------------
+
+    onboarding.induction =
+      inductionItems;
+
+    // ---------------------------------------
+    // Add Missing Course References
+    // ---------------------------------------
+
+    const existingCourseIds =
+      Array.isArray(
+        onboarding.courses
+      )
+        ? onboarding.courses.map(
+            (item) =>
+              String(
+                item.course
+              )
+          )
+        : [];
+
+    const updatedCourses =
+      Array.isArray(
+        onboarding.courses
+      )
+        ? [...onboarding.courses]
+        : [];
+
+    for (
+      const course of onboardingCourses
+    ) {
+      const courseId =
+        String(course._id);
+
+      const alreadyExists =
+        existingCourseIds.includes(
+          courseId
+        );
+
+      if (!alreadyExists) {
+        updatedCourses.push({
+          course:
+            course._id,
+
+          completed:
+            false,
+
+          completedAt:
+            null,
+        });
+      }
+    }
+
+    onboarding.courses =
+      updatedCourses;
+
+    // ---------------------------------------
+    // Save
+    // ---------------------------------------
+
     await onboarding.save();
 
+    // ---------------------------------------
+    // Diagnostics
+    // ---------------------------------------
+
     console.log(
-      "ONBOARDING SYNCED:",
+      "=========================================="
+    );
+
+    console.log(
+      "ONBOARDING SYNC SUCCESSFUL"
+    );
+
+    console.log(
+      "ONBOARDING ID:",
       onboarding._id
     );
 
     console.log(
-      "SYNCED INDUCTION:",
-      onboarding.induction.map(
-        (item) => ({
-          title:
-            item.title,
-
-          studyContentLength:
-            item.studyContent
-              ?.length || 0,
-
-          questionCount:
-            item.questions
-              ?.length || 0,
-
-          passingScore:
-            item.passingScore,
-        })
-      )
+      "COURSES:",
+      onboarding.courses.length
     );
+
+    console.log(
+      "INDUCTION ITEMS:",
+      onboarding.induction.length
+    );
+
+    console.log(
+      "SYNCED INDUCTION:"
+    );
+
+    onboarding.induction.forEach(
+      (item) => {
+        console.log(
+          `${item.title} -> Study: ${
+            item.studyContent
+              ?.length || 0
+          } chars | Questions: ${
+            item.questions
+              ?.length || 0
+          } | Passing Score: ${
+            item.passingScore
+          }`
+        );
+      }
+    );
+
+    console.log(
+      "=========================================="
+    );
+
+    // ---------------------------------------
+    // Response
+    // ---------------------------------------
 
     return res.status(200).json({
       success: true,
 
       message:
-        "Employee onboarding synced successfully.",
+        "Employee onboarding synchronized successfully.",
 
       onboarding,
     });
   } catch (err) {
     console.error(
+      "=========================================="
+    );
+
+    console.error(
       "SYNC EMPLOYEE ONBOARDING ERROR:"
     );
 
     console.error(err);
+
+    console.error(
+      "=========================================="
+    );
 
     return res.status(500).json({
       success: false,
