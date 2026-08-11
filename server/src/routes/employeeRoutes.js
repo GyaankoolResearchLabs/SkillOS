@@ -1,6 +1,6 @@
 const express = require("express");
 
-const router = express.Router();
+const protect = require("../middleware/authMiddleware");
 
 const {
   getEmployees,
@@ -10,6 +10,24 @@ const {
   updateEmployee,
   deleteEmployee,
 } = require("../controllers/employeeController");
+
+const router = express.Router();
+
+// =====================================================
+// AUTHENTICATION
+// =====================================================
+//
+// Every employee/user-management request must have
+// a valid authenticated user and organization context.
+//
+// protect attaches:
+//   req.user
+//   req.organization
+//   req.organizationId
+//
+// =====================================================
+
+router.use(protect);
 
 // =======================================
 // Get All Employees
@@ -30,7 +48,8 @@ router.get("/students", getStudents);
 router.get("/teachers", getTeachers);
 
 // =======================================
-// Create User (Employee / Teacher / Student)
+// Create User
+// Employee / Teacher / Student
 // =======================================
 
 router.post("/", createEmployee);

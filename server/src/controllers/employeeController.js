@@ -8,9 +8,11 @@ const Course = require("../models/Course");
 // =====================================================
 // WORKFLOW ENGINE
 // =====================================================
+
 const {
   createAuditLog,
 } = require("../services/auditLogService");
+
 const {
   triggerWorkflow,
 } = require("../services/workflowService");
@@ -38,17 +40,15 @@ const getSecuritySettingsForUser = async (user) => {
   const organization =
     user?.organization?.trim() || "default";
 
-  let settings =
-    await SecuritySettings.findOne({
-      organization,
-    });
+  let settings = await SecuritySettings.findOne({
+    organization,
+  });
 
   if (!settings) {
-    settings =
-      await SecuritySettings.create({
-        organization,
-        ...DEFAULT_SECURITY_SETTINGS,
-      });
+    settings = await SecuritySettings.create({
+      organization,
+      ...DEFAULT_SECURITY_SETTINGS,
+    });
   }
 
   return settings;
@@ -131,7 +131,8 @@ const validatePasswordPolicy = (
 
   return {
     valid: true,
-    message: "Password meets security requirements.",
+    message:
+      "Password meets security requirements.",
   };
 };
 
@@ -141,13 +142,22 @@ const validatePasswordPolicy = (
 
 const getEmployees = async (req, res) => {
   try {
+    if (!req.organizationId) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Organization context is required.",
+      });
+    }
+
     const employees = await User.find({
       role: "employee",
+      organizationId: req.organizationId,
     })
       .select("-password")
       .sort({ name: 1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: employees.length,
       employees,
@@ -158,7 +168,7 @@ const getEmployees = async (req, res) => {
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
@@ -171,13 +181,22 @@ const getEmployees = async (req, res) => {
 
 const getStudents = async (req, res) => {
   try {
+    if (!req.organizationId) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Organization context is required.",
+      });
+    }
+
     const students = await User.find({
       role: "student",
+      organizationId: req.organizationId,
     })
       .select("-password")
       .sort({ name: 1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: students.length,
       students,
@@ -188,7 +207,7 @@ const getStudents = async (req, res) => {
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
@@ -201,13 +220,22 @@ const getStudents = async (req, res) => {
 
 const getTeachers = async (req, res) => {
   try {
+    if (!req.organizationId) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Organization context is required.",
+      });
+    }
+
     const teachers = await User.find({
       role: "teacher",
+      organizationId: req.organizationId,
     })
       .select("-password")
       .sort({ name: 1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: teachers.length,
       teachers,
@@ -218,7 +246,7 @@ const getTeachers = async (req, res) => {
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
@@ -239,6 +267,22 @@ const createEmployee = async (req, res) => {
       designation,
       role,
     } = req.body;
+
+    // ---------------------------------------
+    // Validate organization context
+    // ---------------------------------------
+
+    if (
+      !req.user ||
+      !req.organization ||
+      !req.organizationId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Authenticated organization context is required.",
+      });
+    }
 
     // ---------------------------------------
     // Validate required fields
@@ -271,7 +315,8 @@ const createEmployee = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: "User already exists.",
+        message:
+          "User already exists.",
       });
     }
 
@@ -330,7 +375,7 @@ const createEmployee = async (req, res) => {
       await bcrypt.hash(password, 10);
 
     // ---------------------------------------
-    // Create Employee
+    // Create Employee/User
     // ---------------------------------------
 
     const user = await User.create({
@@ -348,9 +393,13 @@ const createEmployee = async (req, res) => {
       designation:
         designation?.trim() || "",
 
+      // Legacy organization name
       organization:
-        req.user?.organization?.trim() ||
-        "default",
+        req.organization.name,
+
+      // Authoritative organization link
+      organizationId:
+        req.organizationId,
 
       passwordChangedAt:
         new Date(),
@@ -365,13 +414,33 @@ const createEmployee = async (req, res) => {
       user._id
     );
 
+    console.log(
+      "EMPLOYEE ORGANIZATION:",
+      user.organization
+    );
+
+    console.log(
+      "EMPLOYEE ORGANIZATION ID:",
+      user.organizationId
+    );
+
     // =======================================
     // FIND ONBOARDING COURSES
+    // =======================================
+    //
+    // IMPORTANT:
+    // Only courses belonging to the
+    // authenticated manager's organization
+    // can be assigned automatically.
     // =======================================
 
     const onboardingCourses =
       await Course.find({
+        organizationId:
+          req.organizationId,
+
         audience: "Employee",
+
         status: "Published",
 
         $or: [
@@ -484,6 +553,12 @@ const createEmployee = async (req, res) => {
     // =======================================
     // CREATE COURSE ASSIGNMENTS
     // =======================================
+    //
+    // IMPORTANT:
+    // organizationId is explicitly stored
+    // on every automatically-created
+    // onboarding assignment.
+    // =======================================
 
     const assignments = [];
 
@@ -492,24 +567,66 @@ const createEmployee = async (req, res) => {
     ) {
       const assignment =
         await Assignment.create({
-          employee: user._id,
+          organizationId:
+            req.organizationId,
 
-          course: course._id,
+          employee:
+            user._id,
 
-          status: "Assigned",
+          course:
+            course._id,
 
-          progress: 0,
+          status:
+            "Assigned",
 
-          completedModules: [],
+          progress:
+            0,
 
-          completedLessons: [],
+          completedModules:
+            [],
 
-          assignedAt: new Date(),
+          completedLessons:
+            [],
+
+          lessonHistory:
+            [],
+
+          quizScores:
+            [],
+
+          finalAssessmentScore:
+            null,
+
+          finalAssessmentPassed:
+            false,
+
+          finalAssessmentAnswers:
+            [],
+
+          certificateIssued:
+            false,
+
+          certificateIssuedAt:
+            null,
+
+          startedAt:
+            null,
+
+          completedAt:
+            null,
+
+          assignedAt:
+            new Date(),
         });
 
       console.log(
         "ASSIGNMENT CREATED:",
         assignment._id
+      );
+
+      console.log(
+        "ASSIGNMENT ORGANIZATION ID:",
+        assignment.organizationId
       );
 
       console.log(
@@ -549,11 +666,14 @@ const createEmployee = async (req, res) => {
             })
           ),
 
-        status: "Not Started",
+        status:
+          "Not Started",
 
-        progress: 0,
+        progress:
+          0,
 
-        completedAt: null,
+        completedAt:
+          null,
       });
 
     console.log(
@@ -613,44 +733,55 @@ const createEmployee = async (req, res) => {
         "WORKFLOW EVENT TRIGGERED:",
         "employee.created"
       );
+
       // =======================================
-// AUDIT LOG
-// =======================================
+      // AUDIT LOG
+      // =======================================
 
-await createAuditLog({
-  req,
+      await createAuditLog({
+        req,
 
-  action: "EMPLOYEE_CREATED",
+        action:
+          "EMPLOYEE_CREATED",
 
-  description:
-    `Employee ${user.name} was created successfully.`,
+        description:
+          `Employee ${user.name} was created successfully.`,
 
-  targetType: "Employee",
+        targetType:
+          "Employee",
 
-  targetId: user._id,
+        targetId:
+          user._id,
 
-  targetName: user.name,
+        targetName:
+          user.name,
 
-  status: "Success",
+        status:
+          "Success",
 
-  metadata: {
-    email: user.email,
+        metadata: {
+          email:
+            user.email,
 
-    role: user.role,
+          role:
+            user.role,
 
-    department:
-      user.department,
+          department:
+            user.department,
 
-    designation:
-      user.designation,
+          designation:
+            user.designation,
 
-    onboardingId:
-      onboarding._id,
+          organizationId:
+            req.organizationId,
 
-    courseCount:
-      assignments.length,
-  },
-});
+          onboardingId:
+            onboarding._id,
+
+          courseCount:
+            assignments.length,
+        },
+      });
     } catch (workflowError) {
       console.error(
         "WORKFLOW TRIGGER ERROR:",
@@ -669,23 +800,34 @@ await createAuditLog({
         `${user.role} created successfully.`,
 
       user: {
-        _id: user._id,
+        _id:
+          user._id,
 
-        name: user.name,
+        name:
+          user.name,
 
-        email: user.email,
+        email:
+          user.email,
 
-        role: user.role,
+        role:
+          user.role,
 
         department:
           user.department,
 
         designation:
           user.designation,
+
+        organization:
+          user.organization,
+
+        organizationId:
+          user.organizationId,
       },
 
       onboarding: {
-        _id: onboarding._id,
+        _id:
+          onboarding._id,
 
         status:
           onboarding.status,
@@ -720,16 +862,31 @@ const updateEmployee = async (
   res
 ) => {
   try {
+    if (
+      !req.user ||
+      !req.organizationId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Authenticated organization context is required.",
+      });
+    }
+
     const user =
-      await User.findById(
-        req.params.id
-      );
+      await User.findOne({
+        _id:
+          req.params.id,
+
+        organizationId:
+          req.organizationId,
+      });
 
     if (!user) {
       return res.status(404).json({
         success: false,
         message:
-          "User not found.",
+          "User not found in your organization.",
       });
     }
 
@@ -790,35 +947,42 @@ const updateEmployee = async (
       user.passwordChangedAt =
         new Date();
 
-      // Reset security state after
-      // administrator password reset.
-
       user.failedLoginAttempts = 0;
       user.lockedUntil = null;
     }
 
     await user.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
 
       message:
         "User updated successfully.",
 
       user: {
-        _id: user._id,
+        _id:
+          user._id,
 
-        name: user.name,
+        name:
+          user.name,
 
-        email: user.email,
+        email:
+          user.email,
 
-        role: user.role,
+        role:
+          user.role,
 
         department:
           user.department,
 
         designation:
           user.designation,
+
+        organization:
+          user.organization,
+
+        organizationId:
+          user.organizationId,
       },
     });
   } catch (err) {
@@ -827,7 +991,7 @@ const updateEmployee = async (
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
@@ -843,24 +1007,43 @@ const deleteEmployee = async (
   res
 ) => {
   try {
+    if (
+      !req.user ||
+      !req.organizationId
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Authenticated organization context is required.",
+      });
+    }
+
     const user =
-      await User.findById(
-        req.params.id
-      );
+      await User.findOne({
+        _id:
+          req.params.id,
+
+        organizationId:
+          req.organizationId,
+      });
 
     if (!user) {
       return res.status(404).json({
         success: false,
         message:
-          "User not found.",
+          "User not found in your organization.",
       });
     }
 
-    await User.findByIdAndDelete(
-      req.params.id
-    );
+    await User.findOneAndDelete({
+      _id:
+        req.params.id,
 
-    res.status(200).json({
+      organizationId:
+        req.organizationId,
+    });
+
+    return res.status(200).json({
       success: true,
 
       message:
@@ -872,7 +1055,7 @@ const deleteEmployee = async (
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
@@ -888,54 +1071,56 @@ const syncEmployeeOnboarding = async (
   res
 ) => {
   try {
-    // ---------------------------------------
-    // Find Employee
-    // ---------------------------------------
-
     const employeeId =
       req.user.id;
 
     const employee =
-      await User.findById(
-        employeeId
-      );
+      await User.findOne({
+        _id:
+          employeeId,
+
+        organizationId:
+          req.organizationId,
+      });
 
     if (!employee) {
       return res.status(404).json({
         success: false,
-
         message:
           "Employee not found.",
       });
     }
 
-    // ---------------------------------------
-    // Find Existing Onboarding
-    // ---------------------------------------
-
     const onboarding =
       await Onboarding.findOne({
-        employee: employeeId,
+        employee:
+          employeeId,
       });
 
     if (!onboarding) {
       return res.status(404).json({
         success: false,
-
         message:
           "Onboarding record not found.",
       });
     }
 
     // ---------------------------------------
-    // Find Onboarding Courses
+    // IMPORTANT:
+    // Only use onboarding courses from the
+    // employee's current organization.
     // ---------------------------------------
 
     const courses =
       await Course.find({
-        audience: "Employee",
+        organizationId:
+          req.organizationId,
 
-        status: "Published",
+        audience:
+          "Employee",
+
+        status:
+          "Published",
 
         $or: [
           {
@@ -971,15 +1156,10 @@ const syncEmployeeOnboarding = async (
     if (!courses.length) {
       return res.status(404).json({
         success: false,
-
         message:
           "No onboarding courses found.",
       });
     }
-
-    // ---------------------------------------
-    // Required Induction Titles
-    // ---------------------------------------
 
     const inductionTitles = [
       "Company Introduction",
@@ -988,10 +1168,6 @@ const syncEmployeeOnboarding = async (
       "Department Introduction",
       "Role & Responsibilities",
     ];
-
-    // ---------------------------------------
-    // Rebuild Induction Items
-    // ---------------------------------------
 
     onboarding.induction =
       inductionTitles.map(
@@ -1048,13 +1224,17 @@ const syncEmployeeOnboarding = async (
 
             attempts: [],
 
-            bestScore: 0,
+            bestScore:
+              0,
 
-            lastScore: 0,
+            lastScore:
+              0,
 
-            passed: false,
+            passed:
+              false,
 
-            completed: false,
+            completed:
+              false,
 
             completedAt:
               null,
@@ -1062,15 +1242,7 @@ const syncEmployeeOnboarding = async (
         }
       );
 
-    // ---------------------------------------
-    // Save
-    // ---------------------------------------
-
     await onboarding.save();
-
-    // ---------------------------------------
-    // Debug Information
-    // ---------------------------------------
 
     console.log(
       "ONBOARDING SYNCED:",
@@ -1097,10 +1269,6 @@ const syncEmployeeOnboarding = async (
         })
       )
     );
-
-    // ---------------------------------------
-    // Response
-    // ---------------------------------------
 
     return res.status(200).json({
       success: true,

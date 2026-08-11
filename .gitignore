@@ -13,6 +13,7 @@ build/
 # Uploaded files
 uploads/
 server/uploads/
+server/src/uploads/
 
 # Logs
 *.log

@@ -32,19 +32,28 @@ function ModuleQuiz() {
 
   const [result, setResult] = useState(null);
 
-  useEffect(() => {
-    loadQuiz();
-  }, []);
+  // =====================================================
+  // LOAD QUIZ
+  // =====================================================
 
   useEffect(() => {
-    if (!module) return;
+    loadQuiz();
+  }, [assignmentId, moduleId]);
+
+  // =====================================================
+  // QUIZ TIMER
+  // =====================================================
+
+  useEffect(() => {
+    if (!module || result) return;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
-
         if (prev <= 1) {
           clearInterval(timer);
+
           handleSubmit();
+
           return 0;
         }
 
@@ -53,24 +62,31 @@ function ModuleQuiz() {
     }, 1000);
 
     return () => clearInterval(timer);
+  }, [module, result]);
 
-  }, [module]);
+  // =====================================================
+  // LOAD ASSIGNMENT + MODULE
+  // =====================================================
 
   const loadQuiz = async () => {
-
     try {
+      setLoading(true);
 
       const res =
         await assignmentService.getAssignments();
 
+      const assignments =
+        res.data.assignments || [];
+
       const ass =
-        res.data.assignments.find(
+        assignments.find(
           (a) => a._id === assignmentId
         );
 
       if (!ass) {
-
-        toast.error("Assignment not found.");
+        toast.error(
+          "Assignment not found."
+        );
 
         return;
       }
@@ -78,92 +94,150 @@ function ModuleQuiz() {
       setAssignment(ass);
 
       const mod =
-        ass.course.modules.find(
-          (m) => m._id === moduleId
+        ass.course?.modules?.find(
+          (m) =>
+            m._id?.toString() ===
+            moduleId?.toString()
         );
 
       if (!mod) {
-
-        toast.error("Module not found.");
+        toast.error(
+          "Module not found."
+        );
 
         return;
       }
 
-      if (!mod.quiz || mod.quiz.length === 0) {
+      if (
+        !mod.quiz ||
+        mod.quiz.length === 0
+      ) {
+        toast.error(
+          "No quiz available."
+        );
 
-        toast.error("No quiz available.");
-
-        navigate(`/${user.role}/course/${assignmentId}`);
+        navigate(
+          `/${user.role}/course/${assignmentId}`
+        );
 
         return;
-
       }
 
       setModule(mod);
-
     } catch (err) {
+      console.error(
+        "LOAD QUIZ ERROR:",
+        err
+      );
 
-      console.error(err);
-
-      toast.error("Unable to load quiz.");
-
+      toast.error(
+        "Unable to load quiz."
+      );
     } finally {
-
       setLoading(false);
-
     }
-
   };
 
-  const handleOptionChange = (questionIndex, option) => {
+  // =====================================================
+  // SELECT ANSWER
+  // =====================================================
 
+  const handleOptionChange = (
+    questionIndex,
+    option
+  ) => {
     setAnswers((prev) => ({
       ...prev,
       [questionIndex]: option,
     }));
-
   };
 
-  const nextQuestion = () => {
+  // =====================================================
+  // NEXT QUESTION
+  // =====================================================
 
+  const nextQuestion = () => {
     if (
       currentQuestion <
       module.quiz.length - 1
     ) {
-      setCurrentQuestion(currentQuestion + 1);
+      setCurrentQuestion(
+        currentQuestion + 1
+      );
     }
-
   };
+
+  // =====================================================
+  // PREVIOUS QUESTION
+  // =====================================================
 
   const previousQuestion = () => {
-
     if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1);
+      setCurrentQuestion(
+        currentQuestion - 1
+      );
     }
-
   };
 
+  // =====================================================
+  // FORMAT TIMER
+  // =====================================================
+
   const formatTime = () => {
+    const mins =
+      Math.floor(timeLeft / 60);
 
-    const mins = Math.floor(timeLeft / 60);
-
-    const secs = timeLeft % 60;
+    const secs =
+      timeLeft % 60;
 
     return `${mins}:${secs
       .toString()
       .padStart(2, "0")}`;
-
   };
-    const handleSubmit = async () => {
 
+  // =====================================================
+  // SUBMIT QUIZ
+  // =====================================================
+
+  const handleSubmit = async () => {
     if (submitting) return;
 
     try {
-
       setSubmitting(true);
 
-      const answerArray = module.quiz.map(
-        (_, index) => answers[index] || ""
+      // =================================================
+      // IMPORTANT:
+      //
+      // Backend expects:
+      //
+      // {
+      //   question: "...",
+      //   answer: "..."
+      // }
+      //
+      // NOT just:
+      //
+      // [
+      //   "Option A",
+      //   "Option B"
+      // ]
+      //
+      // =================================================
+
+      const answerArray =
+        module.quiz.map(
+          (question, index) => ({
+            question:
+              question.question,
+
+            answer:
+              answers[index] || "",
+          })
+        );
+
+      console.log(
+        "QUIZ SUBMISSION:",
+        answerArray
       );
 
       const res =
@@ -173,62 +247,105 @@ function ModuleQuiz() {
           answerArray
         );
 
-      setResult({
-        passed: res.data.passed,
-        score: res.data.score,
-        correctAnswers: res.data.correctAnswers,
-        totalQuestions: res.data.totalQuestions,
-      });
+      console.log(
+        "QUIZ API RESPONSE:",
+        res.data
+      );
 
-      if (res.data.passed) {
-        toast.success("Quiz Passed!");
-      } else {
-        toast.error("Quiz Failed. Try Again.");
+      // =================================================
+      // IMPORTANT:
+      //
+      // Backend response:
+      //
+      // res.data.result
+      //
+      // =================================================
+
+      const quizResult =
+        res.data.result;
+
+      if (!quizResult) {
+        console.error(
+          "QUIZ RESULT MISSING:",
+          res.data
+        );
+
+        toast.error(
+          "Quiz result was not returned by the server."
+        );
+
+        return;
       }
 
-    } catch (err) {
+      setResult({
+        passed:
+          quizResult.passed,
 
-      console.error(err);
+        score:
+          quizResult.score,
+
+        correctAnswers:
+          quizResult.correctAnswers,
+
+        totalQuestions:
+          quizResult.totalQuestions,
+      });
+
+      if (quizResult.passed) {
+        toast.success(
+          "Quiz Passed!"
+        );
+      } else {
+        toast.error(
+          "Quiz Failed. Try Again."
+        );
+      }
+    } catch (err) {
+      console.error(
+        "SUBMIT QUIZ ERROR:",
+        err
+      );
 
       toast.error(
         err.response?.data?.message ||
-        "Unable to submit quiz."
+          "Unable to submit quiz."
       );
-
     } finally {
-
       setSubmitting(false);
-
     }
-
   };
 
-  if (loading) {
+  // =====================================================
+  // LOADING
+  // =====================================================
 
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-screen text-2xl">
         Loading Quiz...
       </div>
     );
-
   }
 
-  if (!module) {
+  // =====================================================
+  // QUIZ NOT FOUND
+  // =====================================================
 
+  if (!module) {
     return (
       <div className="flex justify-center items-center h-screen text-2xl">
         Quiz Not Found
       </div>
     );
-
   }
 
+  // =====================================================
+  // RESULT SCREEN
+  // =====================================================
+
   if (result) {
-
     return (
-
       <div className="max-w-3xl mx-auto py-16 px-6">
-
         <div className="bg-white rounded-3xl shadow-xl p-10 text-center">
 
           <FaCheckCircle
@@ -240,34 +357,34 @@ function ModuleQuiz() {
           />
 
           <h1 className="text-4xl font-bold mt-6">
-
             {result.passed
               ? "Congratulations!"
               : "Quiz Failed"}
-
           </h1>
 
+          {/* SCORE */}
+
           <p className="text-xl mt-6">
-
-            Score : <b>{result.score}%</b>
-
+            Score :{" "}
+            <b>
+              {result.score}%
+            </b>
           </p>
+
+          {/* CORRECT ANSWERS */}
 
           <p className="mt-3">
-
             Correct Answers :
-
             <b>
-
               {" "}
-              {result.correctAnswers} / {result.totalQuestions}
-
+              {result.correctAnswers} /{" "}
+              {result.totalQuestions}
             </b>
-
           </p>
 
-          {result.passed ? (
+          {/* PASSED */}
 
+          {result.passed ? (
             <button
               onClick={() =>
                 navigate(
@@ -278,12 +395,9 @@ function ModuleQuiz() {
             >
               Continue Learning
             </button>
-
           ) : (
-
             <button
               onClick={() => {
-
                 setAnswers({});
 
                 setCurrentQuestion(0);
@@ -291,92 +405,86 @@ function ModuleQuiz() {
                 setResult(null);
 
                 setTimeLeft(600);
-
               }}
               className="mt-10 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold"
             >
               Retry Quiz
             </button>
-
           )}
-
         </div>
-
       </div>
-
     );
-
   }
 
-  const question = module.quiz[currentQuestion];
+  // =====================================================
+  // CURRENT QUESTION
+  // =====================================================
+
+  const question =
+    module.quiz[currentQuestion];
+
+  // =====================================================
+  // QUIZ UI
+  // =====================================================
 
   return (
-
     <div className="max-w-5xl mx-auto py-10 px-6">
+
+      {/* BACK */}
 
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-[#18D39A] font-semibold"
       >
-
         <FaArrowLeft />
 
         Back
-
       </button>
 
+      {/* QUIZ CARD */}
+
       <div className="bg-white rounded-3xl shadow-xl mt-8 p-8">
+
+        {/* HEADER */}
 
         <div className="flex justify-between items-center">
 
           <div>
-
             <h1 className="text-4xl font-bold">
-
               {module.title}
-
             </h1>
 
             <p className="text-gray-500 mt-2">
-
               Module Quiz
-
             </p>
-
           </div>
 
           <div className="flex items-center gap-3 text-red-600 text-xl font-bold">
-
             <FaClock />
 
             {formatTime()}
-
           </div>
-
         </div>
+
+        {/* PROGRESS */}
 
         <div className="mt-10">
 
           <div className="flex justify-between mb-3">
 
             <span>
-
-              Question {currentQuestion + 1} of{" "}
-
+              Question{" "}
+              {currentQuestion + 1} of{" "}
               {module.quiz.length}
-
             </span>
 
             <span>
-
               {Math.round(
                 ((currentQuestion + 1) /
                   module.quiz.length) *
                   100
               )}
-
               %
-
             </span>
 
           </div>
@@ -396,73 +504,83 @@ function ModuleQuiz() {
 
         </div>
 
+        {/* QUESTION */}
+
         <div className="mt-10">
 
           <h2 className="text-2xl font-bold">
-
             {question.question}
-
           </h2>
+
+          {/* OPTIONS */}
 
           <div className="space-y-4 mt-8">
 
-            {question.options.map((option, index) => (
+            {question.options.map(
+              (option, index) => (
+                <label
+                  key={index}
+                  className={`flex items-center gap-4 border rounded-xl p-5 cursor-pointer transition hover:border-[#18D39A] ${
+                    answers[
+                      currentQuestion
+                    ] === option
+                      ? "border-[#18D39A] bg-green-50"
+                      : ""
+                  }`}
+                >
 
-              <label
-                key={index}
-                className={`flex items-center gap-4 border rounded-xl p-5 cursor-pointer transition hover:border-[#18D39A] ${
-                  answers[currentQuestion] === option
-                    ? "border-[#18D39A] bg-green-50"
-                    : ""
-                }`}
-              >
+                  <input
+                    type="radio"
+                    name={`question-${currentQuestion}`}
+                    checked={
+                      answers[
+                        currentQuestion
+                      ] === option
+                    }
+                    onChange={() =>
+                      handleOptionChange(
+                        currentQuestion,
+                        option
+                      )
+                    }
+                  />
 
-                <input
-                  type="radio"
-                  name={`question-${currentQuestion}`}
-                  checked={
-                    answers[currentQuestion] === option
-                  }
-                  onChange={() =>
-                    handleOptionChange(
-                      currentQuestion,
-                      option
-                    )
-                  }
-                />
+                  {option}
 
-                {option}
-
-              </label>
-
-            ))}
+                </label>
+              )
+            )}
 
           </div>
-                  </div>
+        </div>
+
+        {/* NAVIGATION */}
 
         <div className="flex justify-between mt-10">
 
           <button
             onClick={previousQuestion}
-            disabled={currentQuestion === 0}
+            disabled={
+              currentQuestion === 0
+            }
             className="bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 rounded-xl flex items-center gap-2"
           >
             <FaChevronLeft />
+
             Previous
           </button>
 
-          {currentQuestion < module.quiz.length - 1 ? (
-
+          {currentQuestion <
+          module.quiz.length - 1 ? (
             <button
               onClick={nextQuestion}
               className="bg-[#18D39A] hover:bg-[#14bc87] text-white px-6 py-3 rounded-xl flex items-center gap-2"
             >
               Next
+
               <FaChevronRight />
             </button>
-
           ) : (
-
             <button
               onClick={handleSubmit}
               disabled={submitting}
@@ -472,10 +590,10 @@ function ModuleQuiz() {
                 ? "Submitting..."
                 : "Submit Quiz"}
             </button>
-
           )}
-
         </div>
+
+        {/* QUIZ SUMMARY */}
 
         <div className="mt-8 bg-gray-50 rounded-xl p-5">
 
@@ -485,25 +603,30 @@ function ModuleQuiz() {
 
           <div className="grid grid-cols-5 md:grid-cols-10 gap-3">
 
-            {module.quiz.map((_, index) => (
-
-              <button
-                key={index}
-                onClick={() => setCurrentQuestion(index)}
-                className={`h-10 w-10 rounded-lg font-bold transition ${
-                  answers[index]
-                    ? "bg-[#18D39A] text-white"
-                    : "bg-gray-200 text-gray-700"
-                } ${
-                  currentQuestion === index
-                    ? "ring-2 ring-blue-500"
-                    : ""
-                }`}
-              >
-                {index + 1}
-              </button>
-
-            ))}
+            {module.quiz.map(
+              (_, index) => (
+                <button
+                  key={index}
+                  onClick={() =>
+                    setCurrentQuestion(
+                      index
+                    )
+                  }
+                  className={`h-10 w-10 rounded-lg font-bold transition ${
+                    answers[index]
+                      ? "bg-[#18D39A] text-white"
+                      : "bg-gray-200 text-gray-700"
+                  } ${
+                    currentQuestion ===
+                    index
+                      ? "ring-2 ring-blue-500"
+                      : ""
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              )
+            )}
 
           </div>
 
@@ -514,17 +637,17 @@ function ModuleQuiz() {
               Answered{" "}
 
               <span className="font-bold">
-
-                {Object.keys(answers).length}
-
+                {
+                  Object.keys(
+                    answers
+                  ).length
+                }
               </span>{" "}
 
               of{" "}
 
               <span className="font-bold">
-
                 {module.quiz.length}
-
               </span>{" "}
 
               questions
@@ -546,11 +669,8 @@ function ModuleQuiz() {
         </div>
 
       </div>
-
     </div>
-
   );
-
 }
 
 export default ModuleQuiz;
