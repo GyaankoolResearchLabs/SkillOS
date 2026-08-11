@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
-
-import AssignCourseModal from "../../components/assignment/AssignCourseModal";
-
 import {
   FaBook,
   FaClock,
@@ -14,6 +10,10 @@ import {
   FaCheckCircle,
   FaUserPlus,
 } from "react-icons/fa";
+
+import api from "../../services/api";
+
+import AssignCourseModal from "../../components/assignment/AssignCourseModal";
 
 function Courses() {
   const navigate = useNavigate();
@@ -63,10 +63,6 @@ function Courses() {
 
       const config = getAuthConfig();
 
-      // -------------------------------------------------
-      // TOKEN CHECK
-      // -------------------------------------------------
-
       if (!config) {
         console.error(
           "LOAD COURSES: Authentication token missing"
@@ -85,12 +81,8 @@ function Courses() {
         "LOAD COURSES: Requesting authenticated courses..."
       );
 
-      // -------------------------------------------------
-      // GET COURSES
-      // -------------------------------------------------
-
-      const response = await axios.get(
-        "http://localhost:5000/api/courses",
+      const response = await api.get(
+        "/courses",
         config
       );
 
@@ -117,10 +109,6 @@ function Courses() {
         "LOAD COURSES SERVER RESPONSE:",
         error.response?.data
       );
-
-      // -------------------------------------------------
-      // SESSION EXPIRED
-      // -------------------------------------------------
 
       if (
         error.response?.status === 401
@@ -158,9 +146,7 @@ function Courses() {
   // PUBLISH COURSE
   // =====================================================
 
-  const publishCourse = async (
-    courseId
-  ) => {
+  const publishCourse = async (courseId) => {
     const confirmed =
       window.confirm(
         "Are you sure you want to publish this course?"
@@ -169,8 +155,7 @@ function Courses() {
     if (!confirmed) return;
 
     try {
-      const config =
-        getAuthConfig();
+      const config = getAuthConfig();
 
       if (!config) {
         alert(
@@ -187,8 +172,8 @@ function Courses() {
         courseId
       );
 
-      await axios.patch(
-        `http://localhost:5000/api/courses/${courseId}/publish`,
+      await api.patch(
+        `/courses/${courseId}/publish`,
         {},
         config
       );
@@ -240,9 +225,7 @@ function Courses() {
   // DELETE COURSE
   // =====================================================
 
-  const deleteCourse = async (
-    courseId
-  ) => {
+  const deleteCourse = async (courseId) => {
     const confirmed =
       window.confirm(
         "Are you sure you want to permanently delete this course?"
@@ -251,8 +234,7 @@ function Courses() {
     if (!confirmed) return;
 
     try {
-      const config =
-        getAuthConfig();
+      const config = getAuthConfig();
 
       if (!config) {
         alert(
@@ -269,8 +251,8 @@ function Courses() {
         courseId
       );
 
-      await axios.delete(
-        `http://localhost:5000/api/courses/${courseId}`,
+      await api.delete(
+        `/courses/${courseId}`,
         config
       );
 
@@ -321,9 +303,7 @@ function Courses() {
   // OPEN ASSIGN MODAL
   // =====================================================
 
-  const openAssignModal = (
-    course
-  ) => {
+  const openAssignModal = (course) => {
     if (!course?._id) {
       alert(
         "Invalid course selected."
@@ -333,8 +313,7 @@ function Courses() {
     }
 
     if (
-      course.status !==
-      "Published"
+      course.status !== "Published"
     ) {
       alert(
         "This course must be published before it can be assigned."
@@ -360,27 +339,22 @@ function Courses() {
   // ASSIGNMENT SUCCESS
   // =====================================================
 
-  const handleAssigned =
-    async () => {
-      closeAssignModal();
+  const handleAssigned = async () => {
+    closeAssignModal();
 
-      await loadCourses();
-    };
+    await loadCourses();
+  };
 
   // =====================================================
   // FORMAT DATE
   // =====================================================
 
-  const formatDate = (
-    date
-  ) => {
+  const formatDate = (date) => {
     if (!date) {
       return "N/A";
     }
 
-    return new Date(
-      date
-    ).toLocaleString(
+    return new Date(date).toLocaleString(
       "en-GB",
       {
         day: "2-digit",
@@ -418,9 +392,7 @@ function Courses() {
         <button
           type="button"
           onClick={() =>
-            navigate(
-              "/manager/upload"
-            )
+            navigate("/manager/upload")
           }
           className="
             bg-[#18D39A]
@@ -477,9 +449,7 @@ function Courses() {
             <button
               type="button"
               onClick={() =>
-                navigate(
-                  "/manager/upload"
-                )
+                navigate("/manager/upload")
               }
               className="
                 mt-6
@@ -505,269 +475,184 @@ function Courses() {
         courses.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
 
-            {courses.map(
-              (course) => {
-                const isPublished =
-                  course.status ===
-                  "Published";
+            {courses.map((course) => {
+              const isPublished =
+                course.status === "Published";
 
-                return (
-                  <div
-                    key={
-                      course._id
-                    }
-                    className="
-                      bg-white
-                      rounded-3xl
-                      border
-                      border-gray-200
-                      p-6
-                      shadow-sm
-                      hover:shadow-lg
-                      transition
-                      flex
-                      flex-col
-                    "
-                  >
+              return (
+                <div
+                  key={course._id}
+                  className="
+                    bg-white
+                    rounded-3xl
+                    border
+                    border-gray-200
+                    p-6
+                    shadow-sm
+                    hover:shadow-lg
+                    transition
+                    flex
+                    flex-col
+                  "
+                >
 
-                    {/* =====================================
-                        COURSE ICON
-                    ===================================== */}
+                  {/* COURSE ICON */}
 
-                    <div className="w-14 h-14 rounded-2xl bg-[#E8FBF5] flex items-center justify-center">
-                      <FaBook className="text-[#18D39A] text-2xl" />
-                    </div>
+                  <div className="w-14 h-14 rounded-2xl bg-[#E8FBF5] flex items-center justify-center">
+                    <FaBook className="text-[#18D39A] text-2xl" />
+                  </div>
 
-                    {/* =====================================
-                        TITLE
-                    ===================================== */}
+                  {/* TITLE */}
 
-                    <h2 className="text-2xl font-bold text-[#111827] mt-5">
-                      {course.courseTitle}
-                    </h2>
+                  <h2 className="text-2xl font-bold text-[#111827] mt-5">
+                    {course.courseTitle}
+                  </h2>
 
-                    {/* =====================================
-                        DESCRIPTION
-                    ===================================== */}
+                  {/* DESCRIPTION */}
 
-                    <p className="text-[#64748B] mt-3 line-clamp-3 min-h-[72px]">
-                      {course.description ||
-                        "No course description available."}
+                  <p className="text-[#64748B] mt-3 line-clamp-3 min-h-[72px]">
+                    {course.description ||
+                      "No course description available."}
+                  </p>
+
+                  {/* DURATION */}
+
+                  <div className="flex items-center gap-2 mt-5 text-[#475569]">
+                    <FaClock className="text-[#18D39A]" />
+
+                    <span>
+                      {course.estimatedDuration ||
+                        "Duration not specified"}
+                    </span>
+                  </div>
+
+                  {/* CREATED */}
+
+                  <div className="mt-5">
+                    <p className="font-semibold text-[#334155]">
+                      Created
                     </p>
 
-                    {/* =====================================
-                        DURATION
-                    ===================================== */}
+                    <p className="text-[#64748B] mt-1">
+                      {formatDate(
+                        course.createdAt
+                      )}
+                    </p>
+                  </div>
 
-                    <div className="flex items-center gap-2 mt-5 text-[#475569]">
-                      <FaClock className="text-[#18D39A]" />
+                  {/* STATUS */}
 
-                      <span>
-                        {course.estimatedDuration ||
-                          "Duration not specified"}
+                  <div className="mt-5">
+
+                    {isPublished ? (
+                      <span
+                        className="
+                          inline-flex
+                          items-center
+                          gap-2
+                          bg-green-100
+                          text-green-700
+                          px-3
+                          py-1
+                          rounded-full
+                          text-sm
+                          font-semibold
+                        "
+                      >
+                        <FaCheckCircle />
+
+                        Published
                       </span>
-                    </div>
-
-                    {/* =====================================
-                        CREATED
-                    ===================================== */}
-
-                    <div className="mt-5">
-                      <p className="font-semibold text-[#334155]">
-                        Created
-                      </p>
-
-                      <p className="text-[#64748B] mt-1">
-                        {formatDate(
-                          course.createdAt
-                        )}
-                      </p>
-                    </div>
-
-                    {/* =====================================
-                        STATUS
-                    ===================================== */}
-
-                    <div className="mt-5">
-
-                      {isPublished ? (
-                        <span
-                          className="
-                            inline-flex
-                            items-center
-                            gap-2
-                            bg-green-100
-                            text-green-700
-                            px-3
-                            py-1
-                            rounded-full
-                            text-sm
-                            font-semibold
-                          "
-                        >
-                          <FaCheckCircle />
-
-                          Published
-                        </span>
-                      ) : (
-                        <span
-                          className="
-                            inline-flex
-                            items-center
-                            gap-2
-                            bg-yellow-100
-                            text-yellow-700
-                            px-3
-                            py-1
-                            rounded-full
-                            text-sm
-                            font-semibold
-                          "
-                        >
-                          Draft
-                        </span>
-                      )}
-
-                    </div>
-
-                    {/* =====================================
-                        ACTIONS
-                    ===================================== */}
-
-                    <div className="grid grid-cols-2 gap-3 mt-8">
-
-                      {/* VIEW */}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(
-                            `/manager/course/${course._id}`
-                          )
-                        }
+                    ) : (
+                      <span
                         className="
-                          flex
-                          justify-center
+                          inline-flex
                           items-center
                           gap-2
-                          py-2.5
-                          rounded-xl
-                          border
-                          border-blue-200
-                          text-blue-600
-                          hover:bg-blue-50
-                          transition
-                          font-medium
+                          bg-yellow-100
+                          text-yellow-700
+                          px-3
+                          py-1
+                          rounded-full
+                          text-sm
+                          font-semibold
                         "
                       >
-                        <FaEye />
+                        Draft
+                      </span>
+                    )}
 
-                        View
-                      </button>
+                  </div>
 
-                      {/* EDIT */}
+                  {/* ACTIONS */}
 
+                  <div className="grid grid-cols-2 gap-3 mt-8">
+
+                    {/* VIEW */}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/manager/course/${course._id}`
+                        )
+                      }
+                      className="
+                        flex
+                        justify-center
+                        items-center
+                        gap-2
+                        py-2.5
+                        rounded-xl
+                        border
+                        border-blue-200
+                        text-blue-600
+                        hover:bg-blue-50
+                        transition
+                        font-medium
+                      "
+                    >
+                      <FaEye />
+
+                      View
+                    </button>
+
+                    {/* EDIT */}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/manager/course-editor/${course._id}`
+                        )
+                      }
+                      className="
+                        flex
+                        justify-center
+                        items-center
+                        gap-2
+                        py-2.5
+                        rounded-xl
+                        border
+                        border-orange-200
+                        text-orange-500
+                        hover:bg-orange-50
+                        transition
+                        font-medium
+                      "
+                    >
+                      <FaEdit />
+
+                      Edit
+                    </button>
+
+                    {/* PUBLISH */}
+
+                    {!isPublished && (
                       <button
                         type="button"
                         onClick={() =>
-                          navigate(
-                            `/manager/course-editor/${course._id}`
-                          )
-                        }
-                        className="
-                          flex
-                          justify-center
-                          items-center
-                          gap-2
-                          py-2.5
-                          rounded-xl
-                          border
-                          border-orange-200
-                          text-orange-500
-                          hover:bg-orange-50
-                          transition
-                          font-medium
-                        "
-                      >
-                        <FaEdit />
-
-                        Edit
-                      </button>
-
-                      {/* ===================================
-                          PUBLISH
-                      =================================== */}
-
-                      {!isPublished && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            publishCourse(
-                              course._id
-                            )
-                          }
-                          className="
-                            flex
-                            justify-center
-                            items-center
-                            gap-2
-                            py-2.5
-                            rounded-xl
-                            border
-                            border-green-200
-                            text-green-600
-                            hover:bg-green-50
-                            transition
-                            font-medium
-                          "
-                        >
-                          <FaCheckCircle />
-
-                          Publish
-                        </button>
-                      )}
-
-                      {/* ===================================
-                          ASSIGN
-                      =================================== */}
-
-                      {isPublished && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openAssignModal(
-                              course
-                            )
-                          }
-                          className="
-                            flex
-                            justify-center
-                            items-center
-                            gap-2
-                            py-2.5
-                            rounded-xl
-                            border
-                            border-purple-200
-                            text-purple-600
-                            hover:bg-purple-50
-                            transition
-                            font-semibold
-                          "
-                        >
-                          <FaUserPlus />
-
-                          Assign
-                        </button>
-                      )}
-
-                      {/* ===================================
-                          DELETE
-                      =================================== */}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          deleteCourse(
+                          publishCourse(
                             course._id
                           )
                         }
@@ -779,44 +664,94 @@ function Courses() {
                           py-2.5
                           rounded-xl
                           border
-                          border-red-200
-                          text-red-500
-                          hover:bg-red-50
+                          border-green-200
+                          text-green-600
+                          hover:bg-green-50
                           transition
                           font-medium
                         "
                       >
-                        <FaTrash />
+                        <FaCheckCircle />
 
-                        Delete
+                        Publish
                       </button>
+                    )}
 
-                    </div>
+                    {/* ASSIGN */}
+
+                    {isPublished && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openAssignModal(
+                            course
+                          )
+                        }
+                        className="
+                          flex
+                          justify-center
+                          items-center
+                          gap-2
+                          py-2.5
+                          rounded-xl
+                          border
+                          border-purple-200
+                          text-purple-600
+                          hover:bg-purple-50
+                          transition
+                          font-semibold
+                        "
+                      >
+                        <FaUserPlus />
+
+                        Assign
+                      </button>
+                    )}
+
+                    {/* DELETE */}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        deleteCourse(
+                          course._id
+                        )
+                      }
+                      className="
+                        flex
+                        justify-center
+                        items-center
+                        gap-2
+                        py-2.5
+                        rounded-xl
+                        border
+                        border-red-200
+                        text-red-500
+                        hover:bg-red-50
+                        transition
+                        font-medium
+                      "
+                    >
+                      <FaTrash />
+
+                      Delete
+                    </button>
+
                   </div>
-                );
-              }
-            )}
+                </div>
+              );
+            })}
 
           </div>
         )}
 
-      {/* =================================================
-          ASSIGN COURSE MODAL
-      ================================================= */}
+      {/* ASSIGN COURSE MODAL */}
 
       <AssignCourseModal
-        open={
-          showAssignModal
-        }
-        course={
-          selectedCourse
-        }
-        onClose={
-          closeAssignModal
-        }
-        onAssigned={
-          handleAssigned
-        }
+        open={showAssignModal}
+        course={selectedCourse}
+        onClose={closeAssignModal}
+        onAssigned={handleAssigned}
       />
 
     </div>

@@ -10,7 +10,6 @@ import {
   FaLightbulb,
   FaChartLine,
   FaShieldAlt,
-  FaCog,
 } from "react-icons/fa";
 
 import api from "../../../services/api";
@@ -22,6 +21,8 @@ import api from "../../../services/api";
 const DEFAULT_CONFIG = {
   enabled: true,
 
+  // Kept internally.
+  // Provider/model are no longer displayed in the UI.
   provider: "OpenAI",
 
   model: "gpt-4.1",
@@ -40,7 +41,6 @@ const DEFAULT_CONFIG = {
     lessonsPerModule: 4,
   },
 
-  // IMPORTANT:
   // Quiz difficulty uses ONLY:
   // Easy | Medium | Hard
   quizGeneration: {
@@ -358,6 +358,9 @@ export default function AIConfiguration() {
       const payload = {
         enabled: normalizedConfig.enabled,
 
+        // Provider/model remain part of the backend
+        // configuration even though they are no longer
+        // exposed in this UI.
         provider:
           normalizedConfig.provider,
 
@@ -436,7 +439,7 @@ export default function AIConfiguration() {
       toast.error(
         error.response?.data?.message ||
           error.message ||
-          "Failed to save AI configuration."
+          "Failed to save configuration."
       );
     } finally {
       setSaving(false);
@@ -457,8 +460,6 @@ export default function AIConfiguration() {
       return;
     }
 
-    // Create a fresh object instead of
-    // reusing the same DEFAULT_CONFIG reference.
     const resetConfig =
       normalizeConfiguration(
         structuredClone(DEFAULT_CONFIG)
@@ -694,196 +695,6 @@ export default function AIConfiguration() {
               }
             />
           </div>
-        </div>
-      </div>
-
-      {/* =================================================
-          PROVIDER
-      ================================================= */}
-
-      <div
-        className="
-          bg-white
-          rounded-2xl
-          border
-          border-slate-200
-          shadow-sm
-          p-6
-          mb-6
-        "
-      >
-        <div className="flex items-center gap-3 mb-6">
-          <div
-            className="
-              w-10
-              h-10
-              rounded-xl
-              bg-slate-100
-              flex
-              items-center
-              justify-center
-              text-slate-600
-            "
-          >
-            <FaCog />
-          </div>
-
-          <div>
-            <h2 className="text-lg font-bold">
-              AI Provider
-            </h2>
-
-            <p className="text-sm text-slate-500">
-              Configure the AI service used by
-              SkillOS.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-          {/* PROVIDER */}
-
-          <div>
-            <label className="block text-sm font-semibold mb-2">
-              Provider
-            </label>
-
-            <select
-              value={config.provider}
-              onChange={(e) => {
-                const provider =
-                  e.target.value;
-
-                let model = "gpt-4.1";
-
-                if (provider === "Claude") {
-                  model = "claude-sonnet";
-                }
-
-                if (provider === "Gemini") {
-                  model =
-                    "gemini-2.5-flash";
-                }
-
-                setConfig((current) => ({
-                  ...current,
-                  provider,
-                  model,
-                }));
-              }}
-              className="
-                w-full
-                h-12
-                px-4
-                rounded-xl
-                border
-                border-slate-200
-                bg-white
-                focus:outline-none
-                focus:ring-2
-                focus:ring-[#18D39A]
-              "
-            >
-              <option value="OpenAI">
-                OpenAI
-              </option>
-
-              <option value="Claude">
-                Claude
-              </option>
-
-              <option value="Gemini">
-                Gemini
-              </option>
-            </select>
-          </div>
-
-          {/* MODEL */}
-
-          <div>
-            <label className="block text-sm font-semibold mb-2">
-              Model
-            </label>
-
-            <select
-              value={config.model}
-              onChange={(e) =>
-                updateConfig(
-                  "model",
-                  e.target.value
-                )
-              }
-              className="
-                w-full
-                h-12
-                px-4
-                rounded-xl
-                border
-                border-slate-200
-                bg-white
-                focus:outline-none
-                focus:ring-2
-                focus:ring-[#18D39A]
-              "
-            >
-              {config.provider ===
-                "OpenAI" && (
-                <>
-                  <option value="gpt-4.1">
-                    GPT-4.1
-                  </option>
-
-                  <option value="gpt-4.1-mini">
-                    GPT-4.1 Mini
-                  </option>
-                </>
-              )}
-
-              {config.provider ===
-                "Claude" && (
-                <>
-                  <option value="claude-sonnet">
-                    Claude Sonnet
-                  </option>
-
-                  <option value="claude-haiku">
-                    Claude Haiku
-                  </option>
-                </>
-              )}
-
-              {config.provider ===
-                "Gemini" && (
-                <>
-                  <option value="gemini-2.5-flash">
-                    Gemini 2.5 Flash
-                  </option>
-
-                  <option value="gemini-2.5-pro">
-                    Gemini 2.5 Pro
-                  </option>
-                </>
-              )}
-            </select>
-          </div>
-        </div>
-
-        <div
-          className="
-            mt-5
-            p-4
-            rounded-xl
-            bg-amber-50
-            border
-            border-amber-100
-            text-sm
-            text-amber-700
-          "
-        >
-          <strong>Security:</strong>{" "}
-          API keys remain on the server and are
-          never stored in the browser.
         </div>
       </div>
 
